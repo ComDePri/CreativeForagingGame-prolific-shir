@@ -3,14 +3,15 @@ body {
 }
 
 button {
-  background-color: brown;
-  border: 1px solid orange;
+  background-color: firebrick;
+  border: 1px solid indianred;
   width: 150px;
   height: 50px;
   color: white;
   font-size: 0.7em;
   cursor: pointer;
   position: relative;
+  border-radius: 10px;
 }
 
 button:hover {
@@ -20,6 +21,19 @@ button:hover {
 button:disabled {
   background-color: darkgrey;
   border: 1px solid white;
+}
+
+.black-box {
+  background: black;
+  color: white;
+  padding: 20px;
+  border-radius: 10px;
+  text-align: center;
+  width: 60%;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 p {
@@ -268,4 +282,20 @@ a {
 #throw-out-2 {
   margin-left: auto;
   margin-right: auto;
+}
+
+#block-overlay {
+  position: absolute;
+  /* Adjust these values to match the exact position and size of your green blocks area */
+  top: 20%; /* Adjust based on where your blocks are positioned */
+  left: 5%;
+  width: 80%;
+  height: 70%; /* Adjust the height to cover only the blocks area */
+  background-color: rgba(255, 255, 255, 0.001); /* Almost completely transparent */
+  z-index: 10; /* Make sure this is higher than your blocks */
+  pointer-events: auto; /* This captures all mouse events */
+}
+
+#block-overlay.hidden {
+  display: none;
 }

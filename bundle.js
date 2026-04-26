@@ -1,3 +1,34 @@
+let KEYBOARD_CONTROL = false;
+let AUTO_START = true;
+let PROLIFIC = false;
+let TIMEOUT = false
+let RM2 = true;
+const urlParams = new URL(location.href).searchParams;
+
+let FULL_SCREEN = false;
+
+function readUrl() {
+    const urlParams = new URL(location.href).searchParams;
+
+    if (urlParams.get('kbControl') === "true") {
+        KEYBOARD_CONTROL = true;
+    }
+    if (urlParams.get('extStart') === "true") {
+        AUTO_START = false;
+    }
+    if (urlParams.get('prolific') === "true") {
+        PROLIFIC = true;
+        TIMEOUT = true;
+    }
+    if (urlParams.get('timeout') === "true") {
+        TIMEOUT = true;
+    }
+    if (urlParams.get('rm1') === "true") {
+        RM2 = false;
+    }
+}
+
+
 (function (global, factory) {
     typeof exports === 'object' && typeof module !== 'undefined' ? factory() :
         typeof define === 'function' && define.amd ? define(factory) :
@@ -9101,8 +9132,6 @@
         var newSize = new PIXI.Point(scale * app.renderer.width, scale * app.renderer.height);
         var remainingSpace = new PIXI.Point(parentSize.x - newSize.x, parentSize.y - newSize.y);
 
-        console.log("setting scale to", scale);
-
         var css = "scale(" + scale + ") translate(" + (remainingSpace.x / 2).toFixed(2) + "px, " + (remainingSpace.y / 2).toFixed(2) + "px)";
         var element = document.getElementById("game-container");
         var _arr = ["transform", "webkitTransform", "msTransform"];
@@ -9158,14 +9187,17 @@
         } else if (element.msRequestFullscreen) {
             element.msRequestFullscreen();
         }
+        FULL_SCREEN = true;
     }
 
     function exitFullscreen() {
         if (document.exitFullscreen) document.exitFullscreen(); else if (document.webkitExitFullscreen) document.webkitExitFullscreen(); else if (document.mozCancelFullScreen) document.mozCancelFullScreen(); else if (document.msExitFullscreen) document.msExitFullscreen();
+        FULL_SCREEN = false;
     }
 
     function inFullscreen() {
         return document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullScreenElement;
+x
     }
 
     var Entity = function (_PIXI$utils$EventEmit) {
@@ -9377,6 +9409,10 @@
     var DRAG_HIGHLIGHT_PERIOD = 500;
     var RED_METRICS_HOST = "api.creativeforagingtask.com";
     var RED_METRICS_GAME_VERSION = "dff09f30-f1ca-406a-aff0-7eff70f2563d";
+    var RM2_PROTOCOL = "https";
+    var RM2_HOST = "api.creativeforagingtask.com";
+    var RM2_DEFAULT_API_KEY = "9af6823d-c77a-4ea9-9ea2-ac12dbf8c07f";
+
 
     var inTraining = true;
 
@@ -9529,6 +9565,8 @@
                 this.done = false;
                 document.getElementById("done-intro").disabled = false;
                 document.getElementById("done-intro").addEventListener("click", this.onDone.bind(this));
+
+                readUrl();
             }
         }, {
             key: "teardown",
@@ -9545,7 +9583,7 @@
             value: function onSetUserProvidedId(e) {
                 document.getElementById("done-intro").disabled = document.getElementById("user-provided-id").value.length === 0;
                 // document.getElementById("done-intro").disabled = false;
-                
+
                 // If enter key pressed
                 if (e.keyCode === 13 && !document.getElementById("done-intro").disabled) {
                     this.onDone();
@@ -9554,19 +9592,31 @@
         }, {
             key: "onDone",
             value: function onDone() {
+
                 // go full screen
                 requestFullscreen(document.getElementById("game-parent"));
                 showFullscreenIcon(false);
 
-                // register provided ID
-                playerData.customData.userProvidedId = document.getElementById("user-provided-id").value;
-                redmetricsConnection.updatePlayer(playerData);
+                if(RM2){
+                    playerData.customData.userProvidedId = document.getElementById("user-provided-id").value;
+                    redmetricsConnection.updateSession(playerData);
 
-                this.done = true;
+                    this.done = true;
+
+                } else {
+
+                    // register provided ID
+                    playerData.customData.userProvidedId = document.getElementById("user-provided-id").value;
+                    redmetricsConnection.updatePlayer(playerData);
+
+                    this.done = true;
+                }
             }
         }]);
         return IntroScene;
     }(Entity);
+
+    var part1done = false;
 
     var TrainingScene = function (_util$Entity2) {
         inherits(TrainingScene, _util$Entity2);
@@ -9600,10 +9650,24 @@
                 document.getElementById("done-training-2").addEventListener("click", this.onDonePart2.bind(this));
                 document.getElementById("after-saving").addEventListener("click", this.onDonePart3.bind(this));
                 document.getElementById("done-training-3").addEventListener("click", function (e) {
-                    _this3.done = true;
-                    inTraining = false;
-                    sceneStartedAt = Date.now();
-                    sendTrigger("startGame");
+                    document.getElementById("done-training-3").disabled = true;
+
+                    function startGame(){
+                        document.removeEventListener("keydown", waitForKeyPress); // Remove listener after key press
+                        _this3.done = true;
+                        inTraining = false;
+                        sceneStartedAt = Date.now();
+                        sendTrigger("startGame");
+                    }
+
+                    if(AUTO_START) {startGame();}
+
+                    function waitForKeyPress(event) {
+                        if (event.key === "5") {startGame();}
+                    }
+
+                    document.addEventListener("keydown", waitForKeyPress);
+
                 });
             }
         }, {
@@ -9630,7 +9694,6 @@
             key: "onDroppedBlock",
             value: function onDroppedBlock() {
                 if (this.didDropBlock) return;
-
                 this.didDropBlock = true;
                 this.blockScene.highlightMovableBlocks();
 
@@ -9641,6 +9704,7 @@
             value: function onDonePart1() {
                 document.getElementById("training-1").style.display = "none";
                 document.getElementById("training-2").style.display = "block";
+                part1done = true;
             }
         }, {
             key: "onDonePart2",
@@ -9748,6 +9812,7 @@
                 this.cancelModal = this.cancelModal.bind(this);
                 this.confirmDone = this.confirmDone.bind(this);
                 document.getElementById("add-shape").addEventListener("click", this.onAddShape);
+                document.addEventListener("keyup", this.onKeyUp.bind(this));
                 document.getElementById("modal-confirm-cancel-button").addEventListener("click", this.cancelModal);
                 document.getElementById("modal-confirm-done-button").addEventListener("click", this.confirmDone);
 
@@ -9775,7 +9840,7 @@
         }, {
             key: "startSquaresCountdown",
             value: function startSquaresCountdown() {
-                if (!this.isTraining) {
+                if (!this.isTraining && TIMEOUT) {
                     var squareCountdownValue = 85;
                     var self = this;
                     window.squareCountdown = setInterval(function () {
@@ -9786,7 +9851,7 @@
                         } else {
                             clearInterval(window.squareCountdown);
                             self.disableBlocks();
-                            this.timesUp = true; 
+                            this.timesUp = true;
                             timerOK = false;
                             document.getElementById("add-shape").disabled = true;
                             document.getElementById("square-timeout-modal").style.display = "block";
@@ -9861,7 +9926,7 @@
             value: function teardown() {
                 sceneLayer.removeChild(this.container);
                 document.getElementById("blocks-gui").style.display = "none";
-
+                document.removeEventListener("keyup", this.onKeyUp);
                 document.getElementById("add-shape").removeEventListener("click", this.onAddShape);
                 document.getElementById("done-adding").removeEventListener("click", this.onAttemptDone);
                 document.getElementById("modal-confirm-cancel-button").removeEventListener("click", this.cancelModal);
@@ -10002,8 +10067,12 @@
                 // If they pressed a number key, add the shape
                 if (!isNaN(parseInt(e.key))) {
                     var keyValue = parseInt(e.key);
-                    if (keyValue == 1 || keyValue == 2) {
-                        this.onAddShape();
+                    if (KEYBOARD_CONTROL &&
+                        (keyValue === 1 || keyValue === 2)) {
+                        const addButton = document.getElementById("add-shape");
+                        if (addButton) {
+                            addButton.click();  // Trigger the button's click event
+                        }
                     }
                 }
             }
@@ -10090,6 +10159,9 @@
             value: function dropBlock(block, droppedPos) {
                 // Find closest grid position
                 var gridPos = pixelPosToGridPos(droppedPos);
+                if(part1done){
+                    this.unhighlightMovableBlocks();
+                }
 
                 var freeGridPositions = this.findFreeGridPositions();
                 var closestGridPos = _.min(freeGridPositions, function (freePos) {
@@ -10106,7 +10178,8 @@
                         startPosition: pointToArray(this.draggingBlockStartGridPosition),
                         endPosition: pointToArray(closestGridPos),
                         time: Date.now() - this.startDragTime,
-                        newShape: convertShapeToArray(this.blockGrid)
+                        newShape: convertShapeToArray(this.blockGrid),
+                        fullScreen: FULL_SCREEN
                     }
                 });
             }
@@ -10216,7 +10289,9 @@
                     type: "added shape to gallery",
                     customData: {
                         shape: convertShapeToArray(this.blockGrid),
-                        timeSinceLastMouseUp: Date.now() - this.lastMouseUpTime
+                        timeSinceLastMouseUp: Date.now() - this.lastMouseUpTime,
+                        fullScreen: FULL_SCREEN
+
                     }
                 });
                 this.startSquaresCountdown();
@@ -10431,7 +10506,9 @@
                     customData: {
                         shapeIndex: shapeIndex,
                         shape: convertShapeToArray(galleryShapes[shapeIndex]),
-                        isSelected: isSelected
+                        isSelected: isSelected,
+                        fullScreen: FULL_SCREEN
+
                     }
                 });
             }
@@ -10468,10 +10545,136 @@
                 });
 
                 this.done = true;
+
+                // click "s" to save file if local=true
+                window.dispatchEvent(new KeyboardEvent("keydown", { key: "s" }));
+
             }
         }]);
         return GalleryScene;
     }(Entity);
+
+    // var ResultsScene = function (_util$Entity5) {
+    //     inherits(ResultsScene, _util$Entity5);
+    //
+    //     function ResultsScene() {
+    //         classCallCheck(this, ResultsScene);
+    //         return possibleConstructorReturn(this, (ResultsScene.__proto__ || Object.getPrototypeOf(ResultsScene)).apply(this, arguments));
+    //     }
+    //
+    //     createClass(ResultsScene, [{
+    //         key: "setup",
+    //         value: function setup() {
+    //             this.container = new PIXI.Container();
+    //             sceneLayer.addChild(this.container);
+    //
+    //             document.getElementById("results-gui").style.display = "block";
+    //
+    //
+    //             if(PROLIFIC) {
+    //                 var searchParams = new URLSearchParams(window.location.search);
+    //                 var expId = searchParams.get("expId") || searchParams.get("expID") || "";
+    //                 var userId = searchParams.get("userId") || searchParams.get("userID") || "";
+    //                 var sessId = searchParams.get("sessId") || searchParams.get("sessID") || "";
+    //                 var studId = searchParams.get("studId") || searchParams.get("studID") || "";
+    //                 var expUrl = searchParams.get("expUrl") || searchParams.get("expurl") || "";
+    //                 var redirectURL = expUrl
+    //                 redirectURL = `${expUrl}?PROLIFIC_PID=${userId}&STUDY_ID=${studId}&SESSION_ID=${sessId}`;
+    //
+    //                 if (!timerOK) {
+    //                     document.getElementById("thanks-block").style.display = "none";
+    //                     redirectURL = `https://app.prolific.com/submissions/complete?cc=C135SBBZ`;
+    //             }
+    //             // else {
+    //             //     document.getElementById("thanks-block-timeout").style.display = "none";
+    //             // }
+    //
+    //             if (!showResults) {
+    //                 document.getElementById("results-block").style.display = "none";
+    //             } else {
+    //                 document.getElementById("thanks-block").style.display = "none";
+    //
+    //                 var slider = new PIXI.Sprite(app$1.loader.resources["images/slider.png"].texture);
+    //                 slider.anchor.set(0.5);
+    //                 slider.position.set(app$1.renderer.width / 2, 145);
+    //                 this.container.addChild(slider);
+    //
+    //                 var ball = new PIXI.Graphics();
+    //                 ball.beginFill(0x2CC62C);
+    //                 ball.drawCircle(app$1.renderer.width / 2 + searchScore * 255, 120, 10);
+    //                 this.container.addChild(ball);
+    //
+    //                 if (searchScore > 0) {
+    //                     document.getElementById("rapid-search-text").style.display = "block";
+    //                 } else {
+    //                     document.getElementById("focused-search-text").style.display = "block";
+    //                 }
+    //
+    //                 var searchScorePercent = Math.round(Math.abs(searchScore) * 100);
+    //                 var _iteratorNormalCompletion9 = true;
+    //                 var _didIteratorError9 = false;
+    //                 var _iteratorError9 = undefined;
+    //
+    //                 try {
+    //                     for (var _iterator9 = document.getElementsByClassName("searchScorePercent")[Symbol.iterator](), _step9; !(_iteratorNormalCompletion9 = (_step9 = _iterator9.next()).done); _iteratorNormalCompletion9 = true) {
+    //                         var el = _step9.value;
+    //
+    //                         el.innerText = searchScorePercent;
+    //                     }
+    //                 } catch (err) {
+    //                     _didIteratorError9 = true;
+    //                     _iteratorError9 = err;
+    //                 } finally {
+    //                     try {
+    //                         if (!_iteratorNormalCompletion9 && _iterator9.return) {
+    //                             _iterator9.return();
+    //                         }
+    //                     } finally {
+    //                         if (_didIteratorError9) {
+    //                             throw _iteratorError9;
+    //                         }
+    //                     }
+    //                 }
+    //
+    //                 document.getElementById("code").innerText = redmetricsConnection.playerId ? redmetricsConnection.playerId.substr(-8) : "Unknown";
+    //
+    //             }
+    //             // Setup followup link
+    //             if(PROLIFIC)
+    //             if (searchParams.has("followupLink") && (!localStorage.getItem('active'))) {
+    //                 var metricsId = redmetricsConnection.playerId || "";
+    //                 var userProvidedId = playerData.customData.userProvidedId || "";
+    //
+    //                 var link = searchParams.get("followupLink");
+    //                 if (!_.contains(link, "?")) link += "?";
+    //                 link += "&IDExp=" + expId + "&IDUser=" + userId + "&IDMetrics=" + metricsId + "&IDUserProvided=" + userProvidedId;
+    //                 document.getElementById("followup-link").href = link;
+    //             } else {
+    //                 document.getElementById("followup-link-container").style.display = "none";
+    //             }
+    //
+    //             window.location.replace(redirectURL);
+    //
+    //             // Redirecting to a link after the experiment. This is different from the one above
+    //             // because it doensn't have the parameters.
+    //             // TODO delete one of them.
+    //             // if (searchParams.has("urlNextLink") && (!localStorage.getItem('active'))) {
+    //             //     var link = searchParams.get("urlNextLink");
+    //             //     if (!_.contains(link, "http://")) {
+    //             //         link = "http://" + link;
+    //             //     }
+    //             //     window.location.replace(link);
+    //             // }
+    //         }
+    //     }, {
+    //         key: "teardown",
+    //         value: function teardown() {
+    //             document.getElementById("results-gui").style.display = "none";
+    //             sceneLayer.removeChild(this.container);
+    //         }
+    //     }]);
+    //     return ResultsScene;
+    // }(Entity);
 
     var ResultsScene = function (_util$Entity5) {
         inherits(ResultsScene, _util$Entity5);
@@ -10489,23 +10692,9 @@
 
                 document.getElementById("results-gui").style.display = "block";
 
-                var searchParams = new URLSearchParams(window.location.search);
-                var expId = searchParams.get("expId") || searchParams.get("expID") || "";
-                var userId = searchParams.get("userId") || searchParams.get("userID") || "";
-                var sessId = searchParams.get("sessId") || searchParams.get("sessID") || "";
-                var studId = searchParams.get("studId") || searchParams.get("studID") || "";
-                var expUrl = searchParams.get("expUrl") || searchParams.get("expurl") || "";
-                var redirectURL = `${expUrl}?PROLIFIC_PID=${userId}&STUDY_ID=${studId}&SESSION_ID=${sessId}`;
-                if (!timerOK) {
-                    document.getElementById("thanks-block").style.display = "none";
-                    redirectURL = `https://app.prolific.com/submissions/complete?cc=C135SBBZ`;
-                } else {
-                    document.getElementById("thanks-block-timeout").style.display = "none";
-                }
-
-
                 if (!showResults) {
                     document.getElementById("results-block").style.display = "none";
+
                 } else {
                     document.getElementById("thanks-block").style.display = "none";
 
@@ -10526,40 +10715,58 @@
                     }
 
                     var searchScorePercent = Math.round(Math.abs(searchScore) * 100);
-                    var _iteratorNormalCompletion9 = true;
-                    var _didIteratorError9 = false;
-                    var _iteratorError9 = undefined;
+                    var _iteratorNormalCompletion8 = true;
+                    var _didIteratorError8 = false;
+                    var _iteratorError8 = undefined;
 
                     try {
-                        for (var _iterator9 = document.getElementsByClassName("searchScorePercent")[Symbol.iterator](), _step9; !(_iteratorNormalCompletion9 = (_step9 = _iterator9.next()).done); _iteratorNormalCompletion9 = true) {
-                            var el = _step9.value;
+                        for (var _iterator8 = document.getElementsByClassName("searchScorePercent")[Symbol.iterator](), _step8; !(_iteratorNormalCompletion8 = (_step8 = _iterator8.next()).done); _iteratorNormalCompletion8 = true) {
+                            var el = _step8.value;
 
                             el.innerText = searchScorePercent;
                         }
                     } catch (err) {
-                        _didIteratorError9 = true;
-                        _iteratorError9 = err;
+                        _didIteratorError8 = true;
+                        _iteratorError8 = err;
                     } finally {
                         try {
-                            if (!_iteratorNormalCompletion9 && _iterator9.return) {
-                                _iterator9.return();
+                            if (!_iteratorNormalCompletion8 && _iterator8.return) {
+                                _iterator8.return();
                             }
                         } finally {
-                            if (_didIteratorError9) {
-                                throw _iteratorError9;
+                            if (_didIteratorError8) {
+                                throw _iteratorError8;
                             }
                         }
                     }
 
-                    document.getElementById("code").innerText = redmetricsConnection.playerId ? redmetricsConnection.playerId.substr(-8) : "Unknown";
+                    document.getElementById("code").innerText = redmetricsConnection.sessionId ? redmetricsConnection.sessionId.substr(-8) : "Unknown";
+                }
+
+                // Get search params
+                var searchParams = new URLSearchParams(window.location.search);
+                var expId = searchParams.get("expId") || searchParams.get("expID") || "";
+                var userId = searchParams.get("userId") || searchParams.get("userID") || "";
+                var sessId = searchParams.get("sessId") || searchParams.get("sessID") || "";
+                var studId = searchParams.get("studId") || searchParams.get("studID") || "";
+                var expUrl = searchParams.get("expUrl") || searchParams.get("expurl") || searchParams.get("expURL") || searchParams.has("followupLink") || searchParams.get("urlNextLink") || "";
+                var redirectURL = `${expUrl}?PROLIFIC_PID=${userId}&STUDY_ID=${studId}&SESSION_ID=${sessId}`;
+
+                if (!timerOK) {
+                    redirectURL = `https://app.prolific.com/submissions/complete?cc=C135SBBZ`;
 
                 }
+
                 // Setup followup link
-                if (searchParams.has("followupLink") && (!localStorage.getItem('active'))) {
-                    var metricsId = redmetricsConnection.playerId || "";
+                if(PROLIFIC){
+                    window.location.replace(redirectURL);
+                }
+
+                if (searchParams.has("followupLink")) {
+                    var metricsId = redmetricsConnection.sessionId || "";
                     var userProvidedId = playerData.customData.userProvidedId || "";
 
-                    var link = searchParams.get("followupLink");
+                    var link = searchParams.get("followupLink") || searchParams.get("urlNextLink") || searchParams.get("expURL") ;
                     if (!_.contains(link, "?")) link += "?";
                     link += "&IDExp=" + expId + "&IDUser=" + userId + "&IDMetrics=" + metricsId + "&IDUserProvided=" + userProvidedId;
                     document.getElementById("followup-link").href = link;
@@ -10567,18 +10774,6 @@
                     document.getElementById("followup-link-container").style.display = "none";
                 }
 
-                window.location.replace(redirectURL);
-
-                // Redirecting to a link after the experiment. This is different from the one above
-                // because it doensn't have the parameters.
-                // TODO delete one of them.
-                if (searchParams.has("urlNextLink") && (!localStorage.getItem('active'))) {
-                    var link = searchParams.get("urlNextLink");
-                    if (!_.contains(link, "http://")) {
-                        link = "http://" + link;
-                    }
-                    window.location.replace(link);
-                }
             }
         }, {
             key: "teardown",
@@ -10620,7 +10815,14 @@
 
     if (timerValue != null) {
         MAX_SEARCH_TIME = parseInt(timerValue) * 60 * 1000;
-        document.getElementById("game-length-sentence").innerHTML = "The game is " + parseInt(timerValue) + " minutes long.";
+
+        const lang = searchParams.get("hebrew");
+        const sentence = lang === "true"
+            ? "✅יש לכם " + parseInt(timerValue) + " דקות לשחק<br>✅שחקו חופשי, אין תשובות נכונות או לא נכונות<br>✅תהנו!"
+            : "✅You have " + parseInt(timerValue) + " minutes to play<br>✅Play freely, there is no right or wrong<br>✅Enjoy!";
+
+
+        document.getElementById("game-length-sentence").innerHTML = sentence;
     }
 
     var gameVersion = searchParams.get("gameVersion");
@@ -10644,16 +10846,47 @@
     app$1.loader.add(["images/slider.png"]).on("progress", loadProgressHandler).load(setup);
 
 // Load RedMetrics
-    var playerData = {
-        externalId: searchParams.get("userId") || searchParams.get("userID"),
-        customData: {
-            expId: searchParams.get("expId") || searchParams.get("expID"),
-            userId: searchParams.get("userId") || searchParams.get("userID"),
-            userAgent: navigator.userAgent
-        }
-    };
 
-    var gameVersionId = !!gameVersion ? gameVersion : RED_METRICS_GAME_VERSION;
+function showRedMetricsStatus(status) {
+    // var _iteratorNormalCompletion9 = true;
+    // var _didIteratorError9 = false;
+    // var _iteratorError9 = undefined;
+    //
+    // try {
+    //     for (var _iterator9 = document.getElementById("redmetrics-connection-status").children[Symbol.iterator](), _step9; !(_iteratorNormalCompletion9 = (_step9 = _iterator9.next()).done); _iteratorNormalCompletion9 = true) {
+    //         var child = _step9.value;
+    //
+    //         var shouldShow = child.id === "redmetrics-connection-status-" + status;
+    //         child.style.display = shouldShow ? "block" : "none";
+    //     }
+    // } catch (err) {
+    //     _didIteratorError9 = true;
+    //     _iteratorError9 = err;
+    // } finally {
+    //     try {
+    //         if (!_iteratorNormalCompletion9 && _iterator9.return) {
+    //             _iterator9.return();
+    //         }
+    //     } finally {
+    //         if (_didIteratorError9) {
+    //             throw _iteratorError9;
+    //         }
+    //     }
+    // }
+}
+
+var playerData = {
+    externalId: searchParams.get("userId") || searchParams.get("userID"),
+    customData: {
+        expId: searchParams.get("expId") || searchParams.get("expID"),
+        userId: searchParams.get("userId") || searchParams.get("userID"),
+        userAgent: navigator.userAgent
+    }
+};
+
+var gameVersionId = !!gameVersion ? gameVersion : RED_METRICS_GAME_VERSION;
+
+if(searchParams.get("rm1") === "true"){
 
     redmetricsConnection = redmetrics.prepareWriteConnection({
         host: RED_METRICS_HOST,
@@ -10663,6 +10896,73 @@
     redmetricsConnection.connect().then(function () {
         console.log("Connected to the RedMetrics server");
     });
+
+} else {
+
+    redmetricsConnection = new rm2.WriteConnection({
+        protocol: RM2_PROTOCOL,
+        host: RM2_HOST,
+        apiKey: searchParams.get("apiKey") || RM2_DEFAULT_API_KEY,
+        session: playerData
+    });
+    redmetricsConnection.connect().then(function () {
+        console.log("Connected to RM2");
+        showRedMetricsStatus("connected");
+    }).catch(function () {
+        showRedMetricsStatus("disconnected");
+    });
+
+}
+
+// Setup local log
+    window.localLog = window.localLog || [];
+
+    (function wrapPostEventAndAddKeyListener() {
+        if (!redmetricsConnection || typeof redmetricsConnection.postEvent !== "function") {
+            console.warn("redmetricsConnection.postEvent not found");
+            return;
+        }
+
+        const originalPostEvent = redmetricsConnection.postEvent.bind(redmetricsConnection);
+
+        redmetricsConnection.postEvent = function wrappedPostEvent(event) {
+            // Save to local log
+            window.localLog.push({
+                type: "event",
+                timestamp: new Date().toISOString(),
+                data: event
+            });
+            //console.log("[LocalLog] postEvent logged:", event);
+
+            // Call original
+            return originalPostEvent(event);
+        };
+
+        // Add 'S' key listener to trigger log download
+        window.addEventListener("keydown", function (e) {
+            if ((e.key === "s" || e.key === "S") && (urlParams.get('local') === "true")) {
+                const searchParams = new URLSearchParams(window.location.search);
+                const expId = searchParams.get("expId") || searchParams.get("expID") || "exp";
+                const userId = searchParams.get("userId") || searchParams.get("userID") || "user";
+
+                const timestamp = new Date().toISOString()
+                    .replace(/:/g, "-")
+                    .replace(/\..+/, "")
+                    .replace("T", "_");
+
+                const filename = `log_exp-${expId}_user-${userId}_${timestamp}.json`;
+                const blob = new Blob([JSON.stringify(window.localLog, null, 2)], {
+                    type: "application/json"
+                });
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = filename;
+                a.click();
+
+                //console.log(`[LocalLog] Download triggered: ${filename}`);
+            }
+        });
+    })();
 
 // Connect to parallel port via Mister P
     var webSocketScheme = window.location.protocol === "https:" ? "wss" : "ws";
@@ -10681,9 +10981,37 @@
         return resizeGame(app$1);
     });
 
+
+    function showBlockOverlay() {
+        document.getElementById('block-overlay').classList.remove('hidden');
+    }
+
+// Function to hide the overlay when leaving training-3
+    function hideBlockOverlay() {
+        document.getElementById('block-overlay').classList.add('hidden');
+    }
+
+// When training-2 is done and training-3 appears
+    document.getElementById('done-training-2').addEventListener('click', function() {
+        // Small delay to ensure the transition to training-3 has completed
+        setTimeout(showBlockOverlay, 100);
+    });
+
+// When the heart button is clicked and we move to training-4
+    document.getElementById('after-saving').addEventListener('click', function() {
+        hideBlockOverlay();
+    });
+
+// For safety, also ensure overlay is hidden after training is complete
+    document.getElementById('done-training-3').addEventListener('click', function() {
+        hideBlockOverlay();
+    });
+
 // // Debugging code
 // for(let i = 0; i < 120; i++) {
 //   galleryShapes.push([{"x":1,"y":0},{"x":2,"y":0},{"x":3,"y":0},{"x":4,"y":0},{"x":5,"y":0},{"x":6,"y":0},{"x":7,"y":0},{"x":8,"y":0},{"x":9,"y":0},{"x":1,"y":-1}]);
 // }
 
 })));
+
+
